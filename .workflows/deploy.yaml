@@ -1,0 +1,94 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: deploy
+  annotations:
+    workflows.argoproj.io/description: >-
+      Clones a git repository and then performs a git checkout of a branch defined
+      in the workflow workflow.parameters. Then merges in a defined target branch.
+    workflows.argoproj.io/maintainer: 'Andy Boutte'
+    workflows.argoproj.io/maintainer_url: 'https://github.com/aboutte'
+spec:
+  entrypoint: main
+  templates:
+  - name: main
+    dag:
+      tasks:
+        - name: deploy
+          template: deploy
+
+  - name: deploy
+    container:
+      image: alpine:latest
+      env:
+       - name: DUPLO_TOKEN
+         valueFrom:
+           secretKeyRef:
+             name: duplo-token
+             key: token
+      command:
+        - sh
+        - -c
+        - |
+          apk --update add curl jq
+
+          duplo_api() {
+              local path="${1:-}"
+              [ $# -eq 0 ] || shift
+
+              [ -z "${path:-}" ] && die "internal error: no API path was given"
+              [ -z "${DUPLO_HOST:-}" ] && die "internal error: duplo_host environment variable must be set"
+              [ -z "${DUPLO_TOKEN:-}" ] && die "internal error: duplo_token environment variable must be set"
+
+              curl -Ssf -H 'Content-type: application/json' -H "Authorization: Bearer $DUPLO_TOKEN" "$@" "${DUPLO_HOST}/${path}"
+          }
+
+          duplo_api_post() {
+            local path="${1:-}"
+            [ $# -eq 0 ] || shift
+
+            local data="${1:-}"
+            [ $# -eq 0 ] || shift
+
+            echo "Request to post data: $data"
+
+            [ -z "${path:-}" ] && die "internal error: no API path was given"
+            [ -z "${DUPLO_HOST:-}" ] && die "internal error: duplo_host environment variable must be set"
+            [ -z "${DUPLO_TOKEN:-}" ] && die "internal error: duplo_token environment variable must be set"
+
+            curl -Ssf -H 'Content-type: application/json' -X POST -H "Authorization: Bearer $DUPLO_TOKEN" -X POST --data "${data}" "${DUPLO_HOST}/${path}" 
+          }
+
+
+          export DOCKER_OWNER="aboutte"
+          export DOCKER_IMAGE="duplocloud-sample-web-app"
+          export DOCKER_IMAGE_VERSION="$(cat /workdir/VERSION)"
+          export image="${DOCKER_OWNER}/${DOCKER_IMAGE}:${DOCKER_IMAGE_VERSION}"
+
+          export DUPLO_HOST="https://salesdemo.duplocloud.net/"
+          # DUPLO_TOKEN environment variable comes from k8s secrets
+
+          export tenantId="a6f17356-bdf8-4358-98b2-891652dd1601"
+          export DUPLO_SERVICE_NAME="sample"
+
+          allocationTag=$(duplo_api "/subscriptions/${tenantId}/GetReplicationControllers" | jq -c ".[] | select( .Template.Name | contains(\"${DUPLO_SERVICE_NAME}\"))" | jq -r '.Template.AllocationTags')
+          data="{\"Name\": \"${DUPLO_SERVICE_NAME}\",\"Image\":\"${image}\",\"AllocationTags\":\"${allocationTag}\"}"
+          echo "Update service for tenant: ${tenantId}, Update: ${data}"
+          duplo_api_post "subscriptions/${tenantId}/ReplicationControllerChange" "$data"
+
+
+          echo "============================================="
+          echo "============================================="
+          echo "New version of docker iamge deployed."
+          echo "============================================="
+          echo "============================================="
+
+      volumeMounts:
+      - name: "workdir"
+        mountPath: /workdir
+      resources:
+        requests:
+          memory: 250Mi
+          cpu: 4m
+    #20 minutes
+    activeDeadlineSeconds: 1200

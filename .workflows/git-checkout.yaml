@@ -6,7 +6,8 @@ metadata:
     workflows.argoproj.io/description: >-
       Clones a git repository and then performs a git checkout of a branch defined
       in the workflow workflow.parameters. Then merges in a defined target branch.
-
+    workflows.argoproj.io/maintainer: 'Andy Boutte'
+    workflows.argoproj.io/maintainer_url: 'https://github.com/aboutte'
 spec:
   entrypoint: main
   templates:
@@ -30,9 +31,19 @@ spec:
           git clone https://github.com/{{workflow.parameters.repo_owner}}/{{workflow.parameters.repo_name}}.git
           cd {{workflow.parameters.repo_name}}
 
+          date '+%s' > /workdir/VERSION
+          chmod 777 /workdir/VERSION
+
           git checkout {{workflow.parameters.git_branch}}
 
-          echo "Complete."
+          echo "============================================="
+          echo "============================================="
+          echo "Git checkout complete."
+          echo "============================================="
+          echo "============================================="
+
+
+
       volumeMounts:
       - name: "workdir"
         mountPath: /workdir

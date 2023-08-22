@@ -21,16 +21,27 @@ spec:
     container:
       image: gcr.io/kaniko-project/executor:debug
       imagePullPolicy: Always
-      command: ['sh', '-c']
-      args:
-      - echo "Retrieving git clone..." && cp -R /workdir/{{workflow.parameters.app_repo}} /container-build
-
-        /kaniko/executor --dockerfile="/container-build/{{workflow.parameters.app_repo}}{{workflow.parameters.path}}/{{workflow.parameters.dockerfile}}" --destination={{workflow.parameters.container_image}}:{{workflow.parameters.container_tag}} --context="dir:///container-build/{{workflow.parameters.app_repo}}/{{workflow.parameters.path}}" --cache=true --use-new-run=true --reproducible=true --push-retry=3
+      command: 
+        - sh
+        - -c
+        - |
+          cd /workdir/{{workflow.parameters.repo_name}}
+          VERSION=$(cat /workdir/VERSION)
+          
+          /kaniko/executor --dockerfile="/workdir/{{workflow.parameters.repo_name}}/{{workflow.parameters.dockerfile}}" --destination=aboutte/{{workflow.parameters.container_image}}:$VERSION --context="dir:///workdir/{{workflow.parameters.repo_name}}/" --cache=true --use-new-run=true --reproducible=true --push-retry=3
+          
+          echo "============================================="
+          echo "============================================="
+          echo "App build, docker image build, and docker image push complete."
+          echo "============================================="
+          echo "============================================="
       volumeMounts:
         - name: container-build
           mountPath: /container-build
         - name: workdir
           mountPath: /workdir
+        - name: kaniko-secret
+          mountPath: /kaniko/.docker
       resources:
         requests:
           memory: 1Gi

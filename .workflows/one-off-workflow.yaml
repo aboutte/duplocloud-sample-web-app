@@ -1,0 +1,9 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow                 
+metadata:
+  # name: one-off-workflow-execution  
+  generateName: pipeline-run-
+spec:
+  entrypoint: main 
+  workflowTemplateRef:
+    name: ci-workflow
